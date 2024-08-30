@@ -41,7 +41,7 @@ if modal.is_open():
             st.session_state['end_date']=end_date
             modal.close()
 
-if st.session_state['keyword']:
+if st.session_state['keyword_h']:
     st.write(f"You entered: {st.session_state['keyword_h']}")
     st.write(f"You entered: {st.session_state['start_date']}")
     st.write(f"You entered: {st.session_state['end_date']}")

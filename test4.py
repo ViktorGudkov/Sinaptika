@@ -36,7 +36,7 @@ if modal.is_open():
              start_date = end_date - timedelta(days=30)
 
         if st.button("Начать поиск"):
-            st.session_state['keyword']=keyword_h
+            st.session_state['keyword_h']=keyword_h
             st.session_state['start_date']=start_date
             st.session_state['end_date']=end_date
             modal.close()

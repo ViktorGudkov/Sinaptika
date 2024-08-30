@@ -2,8 +2,8 @@ import streamlit as st
 from streamlit_modal import Modal
 from datetime import datetime, date, timezone, timedelta, time
 
-if 'keyword' not in st.session_state:
-    st.session_state['keyword'] = ''
+if 'keyword_h' not in st.session_state:
+    st.session_state['keyword_h'] = ''
 if 'start_date' not in st.session_state:
     st.session_state['start_date'] = ''
 if 'end_date' not in st.session_state:
@@ -17,9 +17,9 @@ if st.sidebar.button("Исторический поиск"):
 
 if modal.is_open():
     with modal.container():
-        keyword = st.text_input("Введите ключевое слово")
+        keyword_h = st.text_input("Введите ключевое слово")
         if st.checkbox('Поиск всех постов', key='keyword_search') == True:
-            keyword = 'all_posts'
+            keyword_h = 'all_posts'
         
         period = st.selectbox("Период поиска", ["Один день", "Неделя", "Месяц", "Произвольная дата"], key="period_selectbox")
         
@@ -36,12 +36,12 @@ if modal.is_open():
              start_date = end_date - timedelta(days=30)
 
         if st.button("Начать поиск"):
-            st.session_state['keyword']=keyword
+            st.session_state['keyword']=keyword_h
             st.session_state['start_date']=start_date
             st.session_state['end_date']=end_date
             modal.close()
 
 if st.session_state['keyword']:
-    st.write(f"You entered: {st.session_state['keyword']}")
+    st.write(f"You entered: {st.session_state['keyword_h']}")
     st.write(f"You entered: {st.session_state['start_date']}")
     st.write(f"You entered: {st.session_state['end_date']}")

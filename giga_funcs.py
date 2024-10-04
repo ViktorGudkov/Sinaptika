@@ -81,26 +81,27 @@ async def giga_sum(text, prompt, sentence_num, keyword, model):
 
 summary=[]
 
-async def posts_summary(document_path, prompt_type, keyword):
-
+async def posts_summary(document_path, prompt_type, keyword, update_progress_callback=None):
 
     if prompt_type=='prompt_all_posts':
         prompt = prompt_all_posts = PromptTemplate.from_template('Проанализируй текст и '
                                       'выдели основные мысли и идеи, присутствующие в тексте.'
-                                    'Представь результаты в виде структурированного списка из 1-{sentence_num} предложений . Текст: {text}'
+                                    'Представь результаты в виде структурированного списка из 1-{sentence_num} развернутых предложений. Избегай дублирование новостей. Текст: {text}'
  
     ) 
     else:
         prompt=prompt_key_word = PromptTemplate.from_template('Проанализируй текст и '
                                       f'выдели основные мысли и идеи, связанные со словом {keyword}, присутствующие в тексте.'
-                                    'Представь результаты в виде структурированного списка. Текст: {text}'
+                                    'Представь результаты в виде структурированного списка развернутых предложений. Избегай дублирование новостей. Текст: {text}'
  
     ) 
     
     posts = read_posts_from_docx(document_path)  # Предположим, это функция для чтения постов
+    total_posts = len(posts)  # Общее количество постов
+    processed_posts = 0 
     t1=len(posts)/50
-    print('testtt')
-    print(t1)
+    if update_progress_callback:
+        update_progress_callback(total_posts=total_posts, processed_posts=processed_posts)
     if t1<=11:
         sentence_num=str(20)
     elif t1<20:
@@ -119,11 +120,16 @@ async def posts_summary(document_path, prompt_type, keyword):
         if current_count + post_word_count > 5000:
             # Если добавление поста превышает лимит, обработайте текущий батч и начните новый
             tasks.append(giga_sum(current_batch, prompt, sentence_num, keyword=keyword, model=giga_lite))
+            processed_posts += len(current_batch)
+            
             if len(tasks) == task_limit:
-                # Запускаем задачи, когда их накопилось 10
+                # Запускаем задачи, когда их накопилось 5
                 results = await asyncio.gather(*tasks)
                 print(results)
                 summary.extend(results)
+                            # Обновляем прогресс с помощью переданной функции
+                if update_progress_callback:
+                    update_progress_callback(total_posts=total_posts, processed_posts=processed_posts)
                 tasks = []
             current_batch = [post]
             current_count = post_word_count
@@ -136,11 +142,16 @@ async def posts_summary(document_path, prompt_type, keyword):
    
     if current_batch:
         tasks.append(giga_sum(current_batch, prompt, sentence_num, keyword=keyword, model=giga_lite))
-
+        processed_posts += len(current_batch)
+        
     # Запуск оставшихся задач, если они есть
     if tasks:
         results = await asyncio.gather(*tasks)
         summary.extend(results)
+                
+                # Обновляем прогресс
+        if update_progress_callback:
+            update_progress_callback(total_posts=total_posts, processed_posts=processed_posts)
 
     # Обработка итогового списка summary
     
@@ -161,7 +172,100 @@ async def posts_summary(document_path, prompt_type, keyword):
     sum_summary = await giga_sum(summary, prompt, keyword=keyword, model=giga_lite)
 
     print(sum_summary)
-    return sum_summary       
+    return sum_summary    
+
+# НИЖЕ ФУНКЦИЯ ДЛЯ ОБРАБОТКИ КАЖДОГО ПОСТА ПО ОТДЕЛЬНОСТИ
+
+def extract_date_from_post(post):
+    # Предполагаем, что дата находится в первой строке поста
+    lines = post.splitlines()
+    if lines:
+        date_line = lines[0]
+        return date_line.strip()
+    else:
+        return ''
+
+async def giga_sum_each_post(text, prompt, keyword, model):
+    
+
+    chain = prompt | model
 
 
+    result = await chain.ainvoke(
+   
+    {
+       
+        "text": text
+    }
+
+
+    )
+    
+    return result.content
+
+async def each_post_summary(document_path, prompt_type, keyword, update_progress_callback=None):
+
+    if prompt_type=='prompt_all_posts':
+        prompt = prompt_all_posts = PromptTemplate.from_template('Проанализируй текст и '
+                                      'выдели основные мысли и идеи, присутствующие в тексте, не более чем в 2-3 предложениях.'
+                                    'Текст: {text}'
+ 
+    ) 
+    else:
+        prompt=prompt_key_word = PromptTemplate.from_template('Проанализируй текст и '
+                                      f'выдели основные мысли и идеи, связанные со словом {keyword}, присутствующие в тексте, не более чем в 2-3 предложениях.'
+                                    'Текст: {text}'
+ 
+    ) 
+    
+    posts = read_posts_from_docx(document_path)  # Предположим, это функция для чтения постов
+    total_posts = len(posts)  # Общее количество постов
+    processed_posts = 0 
+
+    current_batch = []
+    sum_summary = []
+    tasks = []
+    task_limit = 5
+    dates_list = []
+
+    for post in posts:
+        
+        date = extract_date_from_post(post)
+        dates_list.append(date)
+    
+        tasks.append(giga_sum_each_post(post, prompt, keyword=keyword, model=giga_lite))
+        processed_posts += 1
+            
+        if len(tasks) == task_limit:
+            # Запускаем задачи, когда их накопилось 5
+            results = await asyncio.gather(*tasks)
+            print(results)
+
+            # Объединяем дату и результат
+            for date, result in zip(dates_list, results):
+                sum_summary.append(f"{date}\n{result}\n")
+            
+            sum_summary.extend(results)
+                            # Обновляем прогресс с помощью переданной функции
+            if update_progress_callback:
+                update_progress_callback(total_posts=total_posts, processed_posts=processed_posts)
+            tasks = []
+            dates_list = []
+       
+        
+    # Запуск оставшихся задач, если они есть
+    if tasks:
+        results = await asyncio.gather(*tasks)
+        
+        # Объединяем дату и результат
+        for date, result in zip(dates_list, results):
+            sum_summary.append(f"{date}\n{result}\n")
+        
+
+                
+                # Обновляем прогресс
+        if update_progress_callback:
+            update_progress_callback(total_posts=total_posts, processed_posts=processed_posts)
+
+    return ''.join(sum_summary)
     
